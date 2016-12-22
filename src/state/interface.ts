@@ -210,6 +210,8 @@ export interface StateDeclaration {
    * Since a resolve function can return a promise, the router will delay entering the state until the  promises
    * are ready.  If any of the promises are rejected, the Transition is aborted with an Error.
    *
+   * #### Parent-child relationships and "retained" states
+   *
    * By default, resolves for a state are fetched just before that state is entered. Note that only states
    * which are being *entered* have their resolves fetched.  States that are "retained" do not have their resolves
    * re-fetched.  If you are currently in a parent state `A` and are transitioning to a child state `A.B`, the
@@ -219,12 +221,17 @@ export interface StateDeclaration {
    *
    * Because of this, resolves are a great place to fetch your application's primary data.
    *
+   * (Note: If needed, all resolves in a state hierarchy can be re-triggered by using the `reload` option when transitioning states)
+   *
    * ### Injecting resolves into other things
    *
    * During a transition, Resolve data can be injected into:
    * - ui-view Controllers
    * - TemplateProviders and ControllerProviders
-   * - Other resolves
+   * - Other resolves, including
+   * -- Resolves on the same state delaration that should proceed only when the injected resolve has returned
+   * -- Resolves on a child state declaration that depend on its parent's resolves return values.
+   * - [[redirectTo]] functions, to delay redirects until injeted resolves have returned values
    *
    * ### Injecting other things into resolves
    *
@@ -237,7 +244,35 @@ export interface StateDeclaration {
    * - `$transition$`: The current [[Transition]] object; information and API about the current transition, such as
    *    "to" and "from" State Parameters and transition options.
    * - Other resolves: This resolve can depend on another resolve, either from the same state, or from any parent state.
-   * - `$stateParams`: (deprecated) The parameters for the current state (Note: these parameter values are
+   * - `$stateParams`: (deprecated) The parameters for the current state (Note: these parameter values are ... ?)
+   *
+   * In Angular 1, resolves must be injected using strict-di or min-safe-style dependency declarations, e.g.
+   *
+   * #### Example:
+   * ```js
+   * {
+   *   name: "myState",
+   *   component: "myStateComponent",
+   *   resolve: {
+   *     val1: (SomeService) => SomeService.getAsyncVal(),
+   *     val2: ["val1", (val1, SomeOtherService) => { //val1 will be injected correctly because it is named before the fn declaration
+   *       "ngInject"; //will correctly (min-safe) inject "SomeOtherService"
+   *       return SomeOtherService.getOtherVal();
+   *     }],
+   *     val3: injectableResolve //alternative approach using strict-di,
+   *     val4: (val1, "MyImportantService") => {
+   *       "ngInject"; //will throw an "Unkown Provider" error for val1Provider
+   *       return MyImportantService.getValUsingOtherResolve(val1);
+   *     }
+   *   }
+   * }
+   *
+   * function injectableResolve(val1, YetAnotherService) {
+   *   return YetAnotherService.getVal();
+   * }
+   *
+   * injectableResolve.$inject = ["val1", "YetAnotherService"];
+   * ```
    *
    * #### Angular 2
    *
